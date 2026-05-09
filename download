@@ -1,0 +1,612 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pool Play Seed Projections</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg: #0d1720;
+    --card: #182230;
+    --line: #2a3648;
+    --muted: #8aa0b6;
+    --fg: #e5ecf4;
+    --accent: #4ea8ff;
+    --good: #4ee07b;
+    --warn: #ffb74e;
+    --bad: #ff6b6b;
+    --locked: #4ee07b;
+    --band: #3a4f6a;
+    --bandbar: #4ea8ff;
+    --sb-amber: #ffc14a;
+    --sb-grass: #2e7d3d;
+    --sb-clay:  #b25a2a;
+  }
+  body::before {
+    content: "";
+    position: fixed; left: 0; right: 0; top: 0; height: 110px;
+    background:
+      linear-gradient(180deg, rgba(46, 125, 61, 0.18) 0%, rgba(46, 125, 61, 0) 100%),
+      linear-gradient(90deg, rgba(255, 193, 74, 0.08) 0%, rgba(255, 193, 74, 0) 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  header, main { position: relative; z-index: 1; }
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { background: var(--bg); color: var(--fg); margin: 0; font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; overflow-x: hidden; }
+  header {
+    display: flex; align-items: center; gap: 1rem;
+    padding: 14px 22px;
+    border-bottom: 1px solid var(--line);
+    box-shadow: inset 0 -2px 0 var(--sb-amber);
+  }
+  header .headings { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  header h1 {
+    font-size: 18px; margin: 0; font-weight: 700;
+    display: flex; align-items: center; gap: 8px;
+    letter-spacing: 0.2px;
+  }
+  header h1::before {
+    content: "⚾";
+    font-size: 16px;
+    filter: drop-shadow(0 0 3px rgba(255, 193, 74, 0.6));
+  }
+  header .sub { color: var(--muted); font-size: 13px; }
+  header .right { margin-left: auto; color: var(--muted); font-size: 12px; text-align: right; }
+  header .right a { color: var(--accent); text-decoration: none; }
+  .poll-reason { display: inline-block; padding: 1px 8px; border-radius: 100px; font-size: 11px; font-weight: 600; letter-spacing: 0.3px; text-transform: uppercase; }
+  .poll-reason.r-finishing { background: rgba(255, 107, 107, 0.15); color: var(--bad); }
+  .poll-reason.r-in_progress { background: rgba(255, 183, 78, 0.15); color: var(--warn); }
+  .poll-reason.r-waiting { background: #253146; color: var(--muted); }
+  .poll-reason.r-idle { background: #253146; color: var(--muted); }
+  main { padding: 18px 22px 40px; display: flex; flex-direction: column; gap: 26px; }
+  .pool {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+    border-left: 3px solid var(--sb-amber);
+  }
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .pool h2 {
+    margin: 0; padding: 12px 16px;
+    border-bottom: 1px solid var(--line);
+    font-size: 15px; font-weight: 700; letter-spacing: 0.3px;
+    display: flex; align-items: center; gap: 12px;
+    background: linear-gradient(90deg, rgba(255, 193, 74, 0.06) 0%, rgba(255, 193, 74, 0) 40%);
+  }
+  .pool h2::first-letter { color: var(--sb-amber); }
+  .pool h2 .chip {
+    background: #253146; color: var(--muted);
+    padding: 2px 10px; border-radius: 100px;
+    font-size: 12px; font-weight: 500; letter-spacing: 0.3px;
+  }
+  .pool h2 .chip.final {
+    background: rgba(46, 125, 61, 0.25); color: var(--good);
+    border: 1px solid rgba(78, 224, 123, 0.25);
+  }
+  .pool h2 .col-toggle {
+    display: none; margin-left: auto; padding: 3px 10px; border-radius: 100px;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.3px;
+    background: rgba(255, 193, 74, 0.1); color: var(--sb-amber);
+    border: 1px solid rgba(255, 193, 74, 0.3); cursor: pointer;
+  }
+  .pool h2 .col-toggle:hover { background: rgba(255, 193, 74, 0.18); border-color: rgba(255, 193, 74, 0.5); }
+  @media (max-width: 680px) { .pool h2 .col-toggle { display: inline-flex; align-items: center; } }
+  table.standings { width: 100%; border-collapse: collapse; }
+  .standings th, .standings td { padding: 8px 12px; text-align: right; font-variant-numeric: tabular-nums; }
+  .standings th:first-child, .standings td:first-child { text-align: left; }
+  .standings th.team, .standings td.team { text-align: left; }
+  .standings thead th { color: var(--muted); font-weight: 500; border-bottom: 1px solid var(--line); font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .standings tbody tr:not(:last-child) td { border-bottom: 1px solid var(--line); }
+  .standings tbody tr:nth-child(even) { background: rgba(255, 255, 255, 0.015); }
+  .standings tbody tr.locked { background: rgba(78, 224, 123, 0.05); }
+  .standings tbody tr.playing-now { box-shadow: inset 3px 0 0 0 var(--sb-amber); }
+  .playing-dot { display: inline-block; margin-right: 4px; font-size: 12px; line-height: 1; filter: drop-shadow(0 0 3px rgba(255, 193, 74, 0.6)); }
+  td.team { vertical-align: middle; }
+  .team-logo { display: inline-block; width: 22px; height: 22px; border-radius: 5px; object-fit: contain; background: #131a27; border: 1px solid var(--line); padding: 1px; vertical-align: -6px; margin-right: 6px; }
+  .team-name { vertical-align: middle; }
+  .team-links { display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; }
+  td.c-links, th.c-links { width: 1%; white-space: nowrap; text-align: center; }
+  .team-link { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 5px; text-decoration: none; border: 1px solid transparent; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 1px 2px rgba(0, 0, 0, 0.35); transition: background 0.1s, border-color 0.1s, transform 0.08s, box-shadow 0.1s; }
+  .team-link:hover { transform: translateY(-1px); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 2px 5px rgba(0, 0, 0, 0.5); }
+  .team-link:active { transform: translateY(0); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35); }
+  .team-link img { display: block; width: 14px; height: 14px; object-fit: contain; background: rgba(255, 255, 255, 0.9); border-radius: 2px; padding: 1px; box-sizing: content-box; }
+  .team-link.usssa { background: rgba(80, 110, 200, 0.18); border-color: rgba(80, 110, 200, 0.45); }
+  .team-link.usssa:hover { background: rgba(80, 110, 200, 0.3); border-color: rgba(80, 110, 200, 0.7); }
+  .team-link.gc { background: rgba(38, 208, 124, 0.16); border-color: rgba(38, 208, 124, 0.45); }
+  .team-link.gc:hover { background: rgba(38, 208, 124, 0.28); border-color: rgba(38, 208, 124, 0.7); }
+  .seed-range { position: relative; width: 140px; max-width: 100%; box-sizing: border-box; height: 20px; background: #0d1420; border-radius: 4px; border: 1px solid var(--line); overflow: hidden; }
+  .seed-range .bar { position: absolute; top: 0; bottom: 0; background: var(--bandbar); opacity: 0.55; border-radius: 2px; }
+  .seed-range .marker { position: absolute; top: -1px; bottom: -1px; width: 2px; background: #fff; box-shadow: 0 0 3px rgba(0,0,0,0.8); }
+  .seed-range .label { position: relative; z-index: 2; display: block; font-size: 11px; font-weight: 700; color: #fff; text-align: center; line-height: 20px; text-shadow: 0 0 3px rgba(0, 0, 0, 0.95), 0 1px 2px rgba(0, 0, 0, 0.9); }
+  .seed-range .label.locked { display: flex; align-items: center; justify-content: center; gap: 4px; }
+  .seed-range .seed-lock { width: 11px; height: 11px; color: var(--locked); flex: 0 0 auto; filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.95)); }
+  td.c-range, th.c-range-header { width: 160px; text-align: center; }
+  td.c-bracket { white-space: nowrap; text-align: center; width: 140px; }
+  .bp-chip { display: inline-flex; align-items: center; justify-content: center; min-width: 120px; min-height: 20px; padding: 2px 10px; background: rgba(255, 193, 74, 0.12); color: var(--sb-amber); border: 1px solid rgba(255, 193, 74, 0.25); border-radius: 8px; font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: 0.3px; box-sizing: border-box; }
+  .bp-chip.multi { flex-direction: column; align-items: stretch; padding: 3px 10px; gap: 1px; }
+  .bp-chip.multi .bp-line { display: block; text-align: center; line-height: 1.2; white-space: nowrap; }
+  .bp-chip.multi .bp-line + .bp-line { border-top: 1px dashed rgba(255, 193, 74, 0.25); padding-top: 2px; margin-top: 1px; }
+  .bp-chip-wrap { position: relative; display: inline-block; }
+  .bp-chip { cursor: pointer; user-select: none; }
+  .bp-chip:hover { background: rgba(255, 193, 74, 0.18); border-color: rgba(255, 193, 74, 0.4); }
+  .bp-chip[aria-expanded="true"] { background: rgba(255, 193, 74, 0.22); border-color: rgba(255, 193, 74, 0.55); }
+  .bp-popover { display: none; position: fixed; z-index: 40; min-width: 220px; max-width: min(320px, 90vw); padding: 8px 10px 10px; background: #141b29; border: 1px solid rgba(255, 193, 74, 0.35); border-radius: 8px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55); color: #cbd5e3; text-align: left; font-size: 12px; font-weight: 500; letter-spacing: 0.2px; white-space: normal; }
+  .bp-chip-wrap.open .bp-popover { display: block; }
+  .bp-pop-group + .bp-pop-group { margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(255, 193, 74, 0.18); }
+  .bp-pop-bracket { font-size: 10px; font-weight: 700; color: var(--sb-amber); letter-spacing: 0.8px; text-transform: uppercase; margin-bottom: 3px; }
+  .bp-popover ul { list-style: none; margin: 0; padding: 0; }
+  .bp-popover li { padding: 2px 0; font-variant-numeric: tabular-nums; line-height: 1.35; display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
+  .bp-pop-time { color: #e5ecf4; font-weight: 600; min-width: 50px; }
+  .bp-pop-seeds { color: var(--muted); font-size: 11px; }
+  .bp-pop-field { color: #9fb0c5; font-size: 11px; }
+  .pill { display: inline-flex; align-items: center; justify-content: center; min-width: 28px; height: 22px; padding: 0 8px; border-radius: 100px; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; background: #253146; color: var(--muted); line-height: 1; }
+  .pill.locked { background: rgba(78, 224, 123, 0.15); color: var(--locked); }
+  .pill.best { background: rgba(78, 168, 255, 0.15); color: var(--accent); }
+  .pill.worst { background: rgba(255, 107, 107, 0.15); color: var(--bad); }
+  .bye { color: var(--muted); }
+  .muted { color: var(--muted); }
+  .diff-pos { color: var(--good); }
+  .diff-neg { color: var(--bad); }
+  .error { background: #3a1818; color: var(--bad); padding: 10px 16px; border-radius: 8px; }
+  .games { padding: 12px 16px 14px; border-top: 1px solid var(--line); }
+  .games details { width: 100%; }
+  .games summary { cursor: pointer; color: var(--muted); font-size: 12px; padding: 2px 0 10px; list-style: none; }
+  .games summary::-webkit-details-marker { display: none; }
+  .games summary::before { content: "▸"; display: inline-block; margin-right: 6px; transition: transform .12s; }
+  .games details[open] > summary::before { transform: rotate(90deg); }
+  .game-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+  .sb { background: linear-gradient(180deg, #0b1018 0%, #08101b 100%); border: 1px solid #1b2738; border-radius: 8px; padding: 8px 10px 6px; font-family: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace; color: #cbd5e3; position: relative; overflow: hidden; }
+  .sb-head { display: flex; justify-content: space-between; align-items: center; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: #6a7e97; margin-bottom: 6px; }
+  .sb-head .sb-time { color: #6a7e97; }
+  .sb-head .sb-stream-chip { display: inline-flex; align-items: center; gap: 4px; margin: 0 auto 0 8px; padding: 1px 6px; border-radius: 3px; font-size: 10px; font-weight: 700; letter-spacing: 1px; text-decoration: none; background: rgba(38, 208, 124, 0.16); color: #3ad68c; border: 1px solid rgba(38, 208, 124, 0.45); }
+  .sb-head .sb-stream-chip:hover { background: rgba(38, 208, 124, 0.28); border-color: rgba(38, 208, 124, 0.7); }
+  .sb-badge { display: inline-flex; align-items: center; gap: 4px; padding: 1px 6px; border-radius: 3px; font-weight: 700; font-size: 10px; letter-spacing: 1.5px; }
+  .sb-badge.final { background: #162034; color: #7aa9ff; border: 1px solid #1f335a; }
+  .sb-badge.sched { background: #141b29; color: #6a7e97; border: 1px solid #212d42; }
+  .sb-badge.live { background: #3a0e0e; color: #ff5a5a; border: 1px solid #6a1a1a; animation: sb-pulse 2.6s infinite ease-in-out; }
+  .sb-badge.live .dot { width: 6px; height: 6px; border-radius: 50%; background: #ff3a3a; box-shadow: 0 0 6px #ff3a3a; }
+  .sb-badge.tie { background: #1f2634; color: #c7b465; border: 1px solid #353520; }
+  .sb-badge.final-gc { background: rgba(255, 193, 74, 0.18); color: var(--sb-amber); border: 1px solid rgba(255, 193, 74, 0.35); }
+  .sb.final-gc { border: 1px solid rgba(255, 193, 74, 0.45); box-shadow: 0 0 0 1px rgba(255, 193, 74, 0.1), 0 0 18px rgba(255, 193, 74, 0.08); background: linear-gradient(180deg, #14110a 0%, #0a0807 100%); }
+  .sb.final-gc .sb-score { color: var(--sb-amber); }
+  .sb-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; padding: 4px 0; border-top: 1px dashed #1a2436; }
+  .sb-row:first-of-type { border-top: none; }
+  .sb-team { display: flex; align-items: center; gap: 6px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; font-weight: 600; color: #9fb0c5; font-size: 13px; min-width: 0; }
+  .sb-team .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sb-team .region { font-size: 10px; color: #5b7091; padding: 1px 4px; border: 1px solid #22314a; border-radius: 3px; font-family: monospace; font-weight: 600; }
+  .sb-gc-btn { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 22px; height: 22px; margin-left: 6px; border-radius: 4px; text-decoration: none; background: rgba(38, 208, 124, 0.16); border: 1px solid rgba(38, 208, 124, 0.45); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 1px 2px rgba(0, 0, 0, 0.35); transition: background 0.1s, border-color 0.1s, transform 0.08s, box-shadow 0.1s; }
+  .sb-gc-btn:hover { background: rgba(38, 208, 124, 0.28); border-color: rgba(38, 208, 124, 0.7); transform: translateY(-1px); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 2px 5px rgba(0, 0, 0, 0.5); }
+  .sb-gc-btn:active { transform: translateY(0); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35); }
+  .sb-gc-btn img { display: block; width: 12px; height: 12px; object-fit: contain; background: rgba(255, 255, 255, 0.9); border-radius: 2px; padding: 1px; box-sizing: content-box; }
+  .sb-score { font-size: 22px; font-weight: 700; color: #4a5b75; font-variant-numeric: tabular-nums; padding-left: 14px; letter-spacing: 1px; }
+  .sb-row.winner .sb-team { color: #fff; }
+  .sb-row.winner .sb-score { color: #ffc14a; text-shadow: 0 0 6px rgba(255, 193, 74, 0.35); }
+  .sb-row.loser .sb-team { color: #6a7e97; }
+  .sb-row.loser .sb-score { color: #384963; }
+  .sb-row.tie .sb-team { color: #e5ecf4; }
+  .sb-row.tie .sb-score { color: #c7b465; }
+  .sb-row.sched .sb-score { color: #2b3a52; }
+  .sb-foot { margin-top: 4px; padding-top: 4px; border-top: 1px solid #141c2b; font-size: 10px; color: #5b7091; letter-spacing: 0.3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .field-swatch { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: 0.5px; border: 1px solid rgba(255, 255, 255, 0.15); }
+  .sb.live { grid-column: span 2; border: 1px solid #6a1a1a; box-shadow: 0 0 0 1px rgba(255, 58, 58, 0.15), 0 0 22px rgba(255, 58, 58, 0.12); background: linear-gradient(180deg, #140608 0%, #0a0508 100%); }
+  .sb.live { padding: 6px 10px 5px; }
+  .sb.live .sb-head { margin-bottom: 3px; }
+  .sb.live .sb-score { font-size: 17px; font-weight: 800; letter-spacing: 0.5px; padding-left: 10px; color: #f2eadc; text-shadow: 0 0 6px rgba(255, 210, 140, 0.25); }
+  .sb.live .sb-team { font-size: 14px; color: #e5ecf4; }
+  .sb.live .sb-row { padding: 2px 0; }
+  .sb.live .sb-inning { font-size: 11px; color: #ff9a6a; letter-spacing: 1px; font-weight: 600; margin-left: 6px; }
+  .sb.live .sb-counts { display: flex; flex-wrap: wrap; gap: 6px 10px; font-size: 10px; color: #c4c4c4; margin-top: 4px; padding-top: 4px; border-top: 1px solid #2a1515; justify-content: space-between; }
+  .sb.live .sb-counts .k { color: #6a7e97; margin-right: 5px; letter-spacing: 1px; font-size: 9px; font-weight: 700; }
+  @keyframes sb-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 58, 58, 0.30); } 50% { box-shadow: 0 0 0 3px rgba(255, 58, 58, 0.0); } }
+  .sb-linescore { margin: 6px 0 2px; overflow-x: auto; font-family: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace; }
+  .sb-linescore table { border-collapse: collapse; width: auto; margin: 0 auto; font-size: 11px; table-layout: fixed; }
+  .sb-linescore th, .sb-linescore td { border: 1px solid #1b2738; width: 22px; min-width: 22px; height: 20px; text-align: center; padding: 0; color: #9fb0c5; font-weight: 500; background: #0b1018; }
+  .sb-linescore thead th { color: #6a7e97; font-weight: 600; background: #0a0f17; }
+  .sb-linescore .ls-abbrev { width: 48px; min-width: 48px; text-align: left; padding: 0 6px; color: #cbd5e3; font-weight: 700; letter-spacing: 0.5px; }
+  .sb-linescore .ls-rhe { color: #cbd5e3; font-weight: 700; }
+  .sb-linescore thead .ls-rhe { color: #9fb0c5; }
+  .sb-linescore .ls-rhe-first { border-left: 2px solid #253146; }
+  @media (prefers-reduced-motion: reduce) { .sb-badge.live, .live-strip-title .live-dot { animation: none; } }
+  .live-strip { background: linear-gradient(180deg, rgba(255, 58, 58, 0.12) 0%, rgba(255, 58, 58, 0) 100%); border: 1px solid rgba(255, 58, 58, 0.35); border-left: 3px solid #ff3a3a; border-radius: 10px; padding: 10px 14px 12px; box-shadow: 0 0 24px rgba(255, 58, 58, 0.12); }
+  .live-strip-title { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; font-size: 14px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: #ff8c8c; }
+  .live-strip-title .live-dot { width: 9px; height: 9px; border-radius: 50%; background: #ff3a3a; box-shadow: 0 0 8px #ff3a3a; animation: sb-pulse 2.6s infinite ease-in-out; }
+  .live-strip-title .chip { background: rgba(255, 58, 58, 0.15); color: #ff8c8c; border: 1px solid rgba(255, 58, 58, 0.3); padding: 2px 10px; border-radius: 100px; font-size: 11px; font-weight: 600; letter-spacing: 0.5px; }
+  .live-strip .sb.live { box-shadow: none; }
+  .live-strip .sb-head .chip { background: #253146; color: var(--muted); border: 1px solid var(--line); padding: 1px 7px; border-radius: 100px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+  @media (max-width: 680px) {
+    header { flex-wrap: wrap; padding: 10px 14px; gap: 6px 12px; align-items: flex-start; }
+    header .headings { flex: 1 1 auto; min-width: 0; }
+    header h1 { font-size: 16px; line-height: 1.15; }
+    header .sub { display: block; font-size: 12px; }
+    header .right { margin-left: auto; font-size: 11px; text-align: right; line-height: 1.3; }
+    main { padding: 12px 10px 40px; gap: 16px; }
+    .pool h2 { padding: 10px 12px; font-size: 14px; flex-wrap: wrap; gap: 6px; }
+    .pool h2 .chip { font-size: 11px; padding: 1px 8px; }
+    .standings th, .standings td { padding: 6px 6px; font-size: 12px; }
+    .standings th { font-size: 10px; }
+    .standings th.team, .standings td.team { max-width: 140px; width: 140px; }
+    .standings td.team { display: flex; align-items: center; gap: 0; min-width: 0; padding-left: 6px; }
+    .standings td.team > .team-star, .standings td.team > .team-logo { flex: 0 0 auto; }
+    .standings td.team .team-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .standings td.team .team-logo { width: 22px; height: 22px; }
+    .standings td.team .team-star { width: 20px; height: 20px; font-size: 14px; margin-right: 2px; }
+    .standings td.c-range, .standings th.c-range-header { width: 80px; }
+    .seed-range { width: 72px; }
+    .standings td.c-bracket { width: auto; }
+    .standings .bp-chip { min-width: 0; padding: 0 7px; }
+    .pool:not(.show-all) .standings .extra-col { display: none; }
+    .game-grid { grid-template-columns: 1fr; gap: 8px; }
+    .sb.live { grid-column: auto; }
+    td.c-bracket { width: auto; text-align: left; }
+    .bp-chip { min-width: 0; padding: 0 8px; height: auto; }
+    .sb.live .sb-score { font-size: 17px; }
+    .sb.live .sb-team { font-size: 14px; }
+    #poll-state { font-size: 11px; }
+  }
+  .team-star { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; margin-right: 4px; padding: 0; border: none; background: transparent; color: #3a4a63; font-size: 16px; line-height: 1; cursor: pointer; border-radius: 4px; vertical-align: middle; transition: color 0.1s, background 0.1s, transform 0.08s; }
+  .team-star:hover { color: #8aa0be; background: rgba(255, 255, 255, 0.04); }
+  .team-star.on { color: var(--sb-amber); text-shadow: 0 0 4px rgba(255, 193, 74, 0.4); }
+  .team-star.on:hover { color: #ffd27a; }
+  .team-star:active { transform: scale(0.92); }
+  .standings tbody tr.watched { background: rgba(255, 193, 74, 0.06); }
+  .standings tbody tr.watched.locked { background: rgba(120, 200, 100, 0.06); }
+  .standings tbody tr.watched td.team { box-shadow: inset 3px 0 0 0 rgba(255, 193, 74, 0.5); }
+  .sb.watched { box-shadow: 0 0 0 1px rgba(255, 193, 74, 0.3), 0 0 12px rgba(255, 193, 74, 0.08); }
+  .sb.live.watched { box-shadow: 0 0 0 1px rgba(255, 58, 58, 0.25), 0 0 12px rgba(255, 193, 74, 0.18); }
+  #activity-feed { max-width: 1200px; margin: 0 auto; padding: 0 16px 32px; }
+  #activity-feed details { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  #activity-feed summary { cursor: pointer; padding: 10px 14px; font-size: 13px; font-weight: 600; letter-spacing: 0.3px; color: var(--muted); list-style: none; display: flex; align-items: center; gap: 8px; }
+  #activity-feed summary::-webkit-details-marker { display: none; }
+  #activity-feed summary::before { content: "▸"; display: inline-block; transition: transform .12s; }
+  #activity-feed details[open] > summary::before { transform: rotate(90deg); }
+  #activity-feed .activity-empty { padding: 8px 14px 12px; margin: 0; font-size: 12px; }
+  #activity-feed .activity-list { list-style: none; margin: 0; padding: 4px 0 6px; max-height: 320px; overflow-y: auto; }
+  #activity-feed .activity-item { display: grid; grid-template-columns: 68px 18px 1fr; gap: 8px; padding: 5px 14px; font-size: 12px; font-variant-numeric: tabular-nums; border-top: 1px solid rgba(255, 255, 255, 0.03); color: #cbd5e3; }
+  #activity-feed .activity-item:first-child { border-top: none; }
+  #activity-feed .act-time { color: var(--muted); font-family: "SF Mono", Menlo, monospace; font-size: 11px; }
+  #activity-feed .act-icon { text-align: center; font-weight: 700; }
+  #activity-feed .activity-item.start { color: #8ec9ff; }
+  #activity-feed .activity-item.start .act-icon { color: #4e9cff; }
+  #activity-feed .activity-item.score { color: #ffdca0; }
+  #activity-feed .activity-item.score .act-icon { color: var(--sb-amber); }
+  #activity-feed .activity-item.inning { color: #b5c5dc; }
+  #activity-feed .activity-item.inning .act-icon { color: #6a7e97; }
+  #activity-feed .activity-item.final { color: #9ddcc0; }
+  #activity-feed .activity-item.final .act-icon { color: #4ee07b; }
+  @media (max-width: 380px) { main { padding: 10px 8px 40px; } .pool h2 { padding: 8px 10px; } .sb { padding: 7px 8px 5px; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="headings">
+    <h1 id="event-name">Pool Play Seed Projections</h1>
+    <span class="sub" id="division">—</span>
+    <span class="sub" id="event-meta"></span>
+  </div>
+  <div class="right">
+    <div>Last update: <span id="fetched">—</span></div>
+    <div id="poll-state" class="muted">—</div>
+    <div><a id="source" href="#" target="_blank">source ↗</a></div>
+  </div>
+</header>
+<main id="app">
+  <p class="muted">Loading…</p>
+</main>
+<section id="activity-feed"></section>
+
+<script>
+let currentRevision = -1;
+let lastRenderedRevision = -1;
+let lastRenderedData = null;
+let pollState = { next_poll_at: null, next_interval_reason: "", next_interval: 0 };
+
+function fmtTime(ts) { if (!ts) return "—"; return new Date(ts * 1000).toLocaleTimeString(); }
+function escapeAttr(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function fmtDurationShort(sec) {
+  if (sec == null || !isFinite(sec)) return "—";
+  const s = Math.max(0, Math.round(sec));
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60), rs = s % 60;
+  if (m < 60) return rs ? `${m}m ${rs}s` : `${m}m`;
+  const h = Math.floor(m / 60), rm = m % 60;
+  return rm ? `${h}h ${rm}m` : `${h}h`;
+}
+const POLL_REASON_LABEL = { finishing:"finishing", in_progress:"games in progress", starting_soon:"starting soon", waiting:"waiting for next game", idle:"idle" };
+function renderPollState() {
+  const el = document.getElementById("poll-state");
+  if (!pollState || !pollState.next_interval_reason) { el.textContent = "—"; return; }
+  const remaining = pollState.next_poll_at ? pollState.next_poll_at - Date.now()/1000 : null;
+  const label = POLL_REASON_LABEL[pollState.next_interval_reason] || pollState.next_interval_reason;
+  el.innerHTML = `<span class="poll-reason r-${pollState.next_interval_reason}">${label}</span><span class="muted"> · next poll in ${fmtDurationShort(remaining)}</span>`;
+}
+setInterval(renderPollState, 1000);
+
+function fmtSchedTime(s) {
+  if (!s) return "";
+  try { const d = new Date(s); return d.toLocaleString(undefined, { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }); }
+  catch { return s; }
+}
+function fmtTimeShort(s) {
+  if (!s) return "";
+  const m = String(s).match(/T(\d{1,2}):(\d{2})/);
+  if (!m) return s;
+  let h = parseInt(m[1], 10); const mm = m[2];
+  const ap = h >= 12 ? "p" : "a";
+  if (h === 0) h = 12; else if (h > 12) h -= 12;
+  return mm === "00" ? `${h}${ap}` : `${h}:${mm}${ap}`;
+}
+function bracketSummary(projections) {
+  if (!projections || !projections.length) return '<span class="muted">—</span>';
+  const byBracket = new Map();
+  for (const g of projections) {
+    if (!byBracket.has(g.bracket_id)) byBracket.set(g.bracket_id, []);
+    byBracket.get(g.bracket_id).push(g);
+  }
+  const lines = [...byBracket.entries()].map(([bid, games]) => {
+    const times = [...new Set(games.map(g => g.scheduled_time).filter(Boolean))].sort();
+    if (!times.length) return `<span class="bp-line">${bid}</span>`;
+    const first = fmtTimeShort(times[0]), last = fmtTimeShort(times[times.length-1]);
+    const timeStr = (times.length === 1 || first === last) ? first : `${first}–${last}`;
+    return `<span class="bp-line">${bid} · ${timeStr}</span>`;
+  });
+  const popoverRows = [...byBracket.entries()].map(([bid, games]) => {
+    const rows = games.slice().sort((a,b)=>(a.scheduled_time||"").localeCompare(b.scheduled_time||"")).map(g => {
+      const t = fmtTimeShort(g.scheduled_time)||"?";
+      const field = g.field ? `<span class="bp-pop-field">${escapeAttr(g.field)}</span>` : "";
+      const seeds = (g.seed_a!=null&&g.seed_b!=null) ? `<span class="bp-pop-seeds">${g.seed_a} v ${g.seed_b}</span>` : "";
+      return `<li><span class="bp-pop-time">${t}</span>${seeds}${field}</li>`;
+    }).join("");
+    return `<div class="bp-pop-group"><div class="bp-pop-bracket">Bracket ${escapeAttr(bid)}</div><ul>${rows}</ul></div>`;
+  }).join("");
+  const cls = lines.length > 1 ? "bp-chip multi" : "bp-chip";
+  return `<span class="bp-chip-wrap"><span class="${cls}" role="button" tabindex="0" aria-expanded="false" aria-haspopup="true">${lines.join("")}</span><div class="bp-popover" role="dialog" aria-label="Possible bracket entries">${popoverRows}</div></span>`;
+}
+const FIELD_COLORS = [["red","#e57373"],["orange","#ffb74d"],["yellow","#fdd835"],["green","#81c784"],["blue","#64b5f6"],["navy","#3f51b5"],["purple","#ba68c8"],["pink","#f06292"],["maroon","#ad1457"],["teal","#26a69a"],["gold","#ffc107"],["silver","#b0bec5"],["bronze","#cd7f32"],["black","#2e2e2e"],["white","#f5f5f5"],["brown","#8d6e63"]];
+function fieldColor(name) {
+  if (!name) return null;
+  const lower = name.toLowerCase();
+  for (const [kw,hex] of FIELD_COLORS) { const re = new RegExp(`(?:^|[^a-z])${kw}(?:$|[^a-z])`,"i"); if (re.test(lower)) return hex; }
+  return null;
+}
+function fieldLabel(name) { if (!name) return ""; const color = fieldColor(name); if (!color) return name; return `<span class="field-swatch" style="background:${color}"></span>${name}`; }
+function shortenField(name) {
+  if (!name) return "";
+  let s = name;
+  const fillers = [/\brecreational complex\b/gi,/\bathletic complex\b/gi,/\bsports? complex\b/gi,/\bbaseball complex\b/gi,/\bsoftball complex\b/gi,/\bbaseball fields?\b/gi,/\brecreation(al)? park\b/gi];
+  for (const re of fillers) s = s.replace(re,"");
+  return s.replace(/\s+/g," ").replace(/\s*-\s*/g,"-").trim();
+}
+const LOCK_SVG = '<svg class="seed-lock" viewBox="0 0 16 16" aria-label="seed locked" role="img"><path fill="none" stroke="currentColor" stroke-width="1.6" d="M5 7.5 V5 a3 3 0 0 1 6 0 V7.5"/><rect x="3.25" y="7.5" width="9.5" height="6.5" rx="1.2" fill="currentColor"/></svg>';
+function seedBar(row) {
+  const n = row.pool_size || 1;
+  const locked = row.best_place === row.worst_place;
+  const labelText = locked ? `${row.best_place}` : `${row.best_place}–${row.worst_place}`;
+  const labelHtml = locked ? `<span class="label locked">${LOCK_SVG}${labelText}</span>` : `<span class="label">${labelText}</span>`;
+  if (n < 2) return `<div class="seed-range">${locked?`<span class="label locked">${LOCK_SVG}${row.current_place}</span>`:`<span class="label">${row.current_place}</span>`}</div>`;
+  const leftPct = ((row.best_place-1)/(n-1))*100, rightPct = ((row.worst_place-1)/(n-1))*100;
+  const width = Math.max(2, rightPct-leftPct), markerPct = ((row.current_place-1)/(n-1))*100;
+  return `<div class="seed-range" title="best ${row.best_place} – worst ${row.worst_place} (current ${row.current_place})"><div class="bar" style="left:${leftPct}%;width:${width}%"></div><div class="marker" style="left:calc(${markerPct}% - 1px)"></div>${labelHtml}</div>`;
+}
+function placePill(row) { return row.clinched ? `<span class="pill locked">${row.current_place}</span>` : `<span class="pill">${row.current_place}</span>`; }
+function record(row) { return row.ties ? `${row.wins}-${row.losses}-${row.ties}` : `${row.wins}-${row.losses}`; }
+function wpDisplay(x1000) { return (x1000/1000).toFixed(3); }
+function sbRow({ team, region, score, rowClass, gcPublicId, gcTarget }) {
+  const regionBadge = region ? `<span class="region">${region}</span>` : "";
+  const path = gcTarget === "live" ? "live" : "team";
+  const title = gcTarget === "live" ? "Open live game in GameChanger" : "Open in GameChanger";
+  const gcBtn = gcPublicId ? `<a class="sb-gc-btn" href="https://web.gc.com/teams/${escapeAttr(gcPublicId)}/${path}" target="_blank" rel="noopener" title="${title}"><img src="https://web.gc.com/favicon.ico" alt="" aria-hidden="true"></a>` : "";
+  return `<div class="sb-row ${rowClass}"><div class="sb-team">${regionBadge}<span class="name">${team}</span>${gcBtn}</div><div class="sb-score">${score}</div></div>`;
+}
+function abbreviateTeam(name) {
+  if (!name) return "";
+  const words = name.split(/\s+/).filter(Boolean);
+  const firstAlnum = (words[0]||"").replace(/[^a-zA-Z0-9]/g,"");
+  if (firstAlnum.length >= 3) return firstAlnum.slice(0,3).toUpperCase();
+  return words.map(w=>(w.replace(/[^a-zA-Z0-9]/g,"")[0]||"")).join("").slice(0,4).toUpperCase();
+}
+function lineScoreBlock(aLine, bLine, aName, bName) {
+  const aScores=(aLine&&aLine.scores)||[], bScores=(bLine&&bLine.scores)||[];
+  const aTotals=(aLine&&aLine.totals)||[], bTotals=(bLine&&bLine.totals)||[];
+  const innings=Math.max(aScores.length,bScores.length);
+  if (innings===0) return "";
+  const innHdr=Array.from({length:innings},(_,i)=>`<th>${i+1}</th>`).join("");
+  const rheHdr=`<th class="ls-rhe ls-rhe-first">R</th><th class="ls-rhe">H</th><th class="ls-rhe">E</th>`;
+  const inningCells=scores=>Array.from({length:innings},(_,i)=>`<td>${scores[i]==null?"":scores[i]}</td>`).join("");
+  const totalCells=totals=>{const v=i=>totals[i]==null?"":totals[i];return`<td class="ls-rhe ls-rhe-first">${v(0)}</td><td class="ls-rhe">${v(1)}</td><td class="ls-rhe">${v(2)}</td>`;};
+  return `<div class="sb-linescore"><table><thead><tr><th class="ls-abbrev"></th>${innHdr}${rheHdr}</tr></thead><tbody><tr><td class="ls-abbrev">${abbreviateTeam(aName)}</td>${inningCells(aScores)}${totalCells(aTotals)}</tr><tr><td class="ls-abbrev">${abbreviateTeam(bName)}</td>${inningCells(bScores)}${totalCells(bTotals)}</tr></tbody></table></div>`;
+}
+function renderGame(g) {
+  const timeLabel = fmtSchedTime(g.scheduled_time)||"";
+  const shortField = shortenField(g.field_name||"");
+  const field = fieldLabel(shortField);
+  const live = g.live||null;
+  const watched = watchedTeams.has(g.team_a_id)||watchedTeams.has(g.team_b_id)?"watched":"";
+  if (live) {
+    const isCompletedOnGC = live.source==="gc_completed";
+    const badgeClass=isCompletedOnGC?"final-gc":"live", badgeLabel=isCompletedOnGC?"FINAL (GC)":"LIVE", badgeDot=isCompletedOnGC?"":"<span class=\"dot\"></span>";
+    let inningChip="";
+    if (!isCompletedOnGC) {
+      let inning=live.inning, half=live.half;
+      if ((inning==null||!half)&&typeof live.inning_label==="string") { const m=live.inning_label.match(/^([TB])\s*(\d+)$/i); if(m){half=m[1].toUpperCase()==="T"?"top":"bottom";inning=parseInt(m[2],10);} }
+      if (inning!=null&&half) { const arrow=half==="top"?"▲":"▼"; inningChip=`<span class="sb-inning">${arrow} ${inning}</span>`; }
+      else if (live.inning_label) inningChip=`<span class="sb-inning">${live.inning_label}</span>`;
+    }
+    const streamChip=(g.gc&&g.gc.has_live_stream&&g.gc.event_id)?`<a class="sb-stream-chip" href="https://web.gc.com/events/${escapeAttr(g.gc.event_id)}" target="_blank" rel="noopener" title="Watch live stream in GameChanger">📺 STREAM</a>`:"";
+    return `<div class="sb live ${isCompletedOnGC?'final-gc':''} ${watched}"><div class="sb-head"><span class="sb-time">${timeLabel}</span>${streamChip}<span class="sb-badge ${badgeClass}">${badgeDot}${badgeLabel}${inningChip}</span></div>${sbRow({team:g.team_a_name,score:String(live.team_a_score??0),rowClass:"",gcPublicId:g.team_a_gc_public_id,gcTarget:"live"})}${sbRow({team:g.team_b_name,score:String(live.team_b_score??0),rowClass:"",gcPublicId:g.team_b_gc_public_id,gcTarget:"live"})}${lineScoreBlock(live.team_a_line,live.team_b_line,g.team_a_name,g.team_b_name)}<div class="sb-counts">${live.outs!=null?`<span><span class="k">OUTS</span>${live.outs}</span>`:""} ${live.balls!=null?`<span><span class="k">BALLS</span>${live.balls}</span>`:""} ${live.strikes!=null?`<span><span class="k">STRIKES</span>${live.strikes}</span>`:""} ${field?`<span>${field}</span>`:""}</div></div>`;
+  }
+  if (!g.played) {
+    return `<div class="sb ${watched}"><div class="sb-head"><span class="sb-time">${timeLabel}</span><span class="sb-badge sched">scheduled</span></div>${sbRow({team:g.team_a_name,score:"—",rowClass:"sched",gcPublicId:g.team_a_gc_public_id})}${sbRow({team:g.team_b_name,score:"—",rowClass:"sched",gcPublicId:g.team_b_gc_public_id})}${field?`<div class="sb-foot">${field}</div>`:""}</div>`;
+  }
+  if (g.is_tie) {
+    const isGcTie=g.final_source==="gc";
+    return `<div class="sb ${isGcTie?'final-gc':''} ${watched}" ${isGcTie?'title="GameChanger has the final; USSSA has not yet posted."':''}><div class="sb-head"><span class="sb-time">${timeLabel}</span><span class="sb-badge ${isGcTie?'final-gc':'tie'}">${isGcTie?'TIE · GC':'tie · final'}</span></div>${sbRow({team:g.team_a_name,score:String(g.winner_score),rowClass:"tie",gcPublicId:g.team_a_gc_public_id})}${sbRow({team:g.team_b_name,score:String(g.loser_score),rowClass:"tie",gcPublicId:g.team_b_gc_public_id})}${field?`<div class="sb-foot">${field}</div>`:""}</div>`;
+  }
+  const aWon=g.winner_id===g.team_a_id, aScore=aWon?g.winner_score:g.loser_score, bScore=aWon?g.loser_score:g.winner_score;
+  const isGcFinal=g.final_source==="gc", sbClass=isGcFinal?"sb final-gc":"sb", badgeClass=isGcFinal?"final-gc":"final", badgeLabel=isGcFinal?"FINAL · GC":"final";
+  return `<div class="${sbClass} ${watched}" ${isGcFinal?'title="GameChanger has the final; USSSA has not yet posted. Will switch to official once it does."':''}><div class="sb-head"><span class="sb-time">${timeLabel}</span><span class="sb-badge ${badgeClass}">${badgeLabel}</span></div>${sbRow({team:g.team_a_name,score:String(aScore),rowClass:aWon?"winner":"loser",gcPublicId:g.team_a_gc_public_id})}${sbRow({team:g.team_b_name,score:String(bScore),rowClass:aWon?"loser":"winner",gcPublicId:g.team_b_gc_public_id})}${field?`<div class="sb-foot">${field}</div>`:""}</div>`;
+}
+function renderPool(pool) {
+  const rows = pool.teams.map(r => {
+    const diffClass=r.avg_capped_diff>0?"diff-pos":(r.avg_capped_diff<0?"diff-neg":"");
+    const diffStr=`${r.avg_capped_diff>=0?'+':''}${r.avg_capped_diff.toFixed(2)}`;
+    const bpCell=bracketSummary(r.bracket_projection||[]);
+    const isWatched=watchedTeams.has(r.team_id);
+    const rowClasses=[r.clinched?'locked':'',r.is_playing_now?'playing-now':'',isWatched?'watched':''].filter(Boolean).join(' ');
+    const starBtn=`<button class="team-star ${isWatched?'on':''}" type="button" data-team-id="${r.team_id}" aria-pressed="${isWatched}" title="${isWatched?'Unwatch this team':'Watch this team'}">${isWatched?'★':'☆'}</button>`;
+    const logo=r.avatar_url?`<img class="team-logo" src="${escapeAttr(r.avatar_url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` :'';
+    const usssaUrl=`https://www.usssa.com/default/teamHome/?teamID=${r.team_id}`;
+    const gcUrl=r.gc_public_id?`https://web.gc.com/teams/${escapeAttr(r.gc_public_id)}/team`:null;
+    const linkBtns=`<a class="team-link usssa" href="${escapeAttr(usssaUrl)}" target="_blank" rel="noopener" aria-label="USSSA team page" title="USSSA team page"><img src="https://www.usssa.com/favicon.ico" alt="" aria-hidden="true"></a>`+(gcUrl?`<a class="team-link gc" href="${gcUrl}" target="_blank" rel="noopener" aria-label="GameChanger team page" title="Open in GameChanger"><img src="https://web.gc.com/favicon.ico" alt="" aria-hidden="true"></a>`:'');
+    return `<tr class="${rowClasses}"><td class="team" data-label="Team">${starBtn}${logo}<span class="team-name">${r.team_name}</span></td><td class="c-links" data-label="Links"><span class="team-links">${linkBtns}</span></td><td class="extra-col" data-label="Now">${placePill(r)}</td><td class="c-range" data-label="Seed range">${seedBar(r)}</td><td class="c-bracket" data-label="Bracket Entry">${bpCell}</td><td class="extra-col" data-label="Rem">${r.remaining_games}</td><td class="extra-col" data-label="Rec">${record(r)}</td><td class="extra-col" data-label="WP">${wpDisplay(r.win_pct_x1000)}</td><td class="extra-col" data-label="Avg PA">${r.avg_points_allowed.toFixed(2)}</td><td class="extra-col ${diffClass}" data-label="Avg Diff">${diffStr}</td></tr>`;
+  }).join("");
+  const games=pool.games.filter(g=>!g.live).map(renderGame).join("");
+  const detailsId=`pool-${pool.letter}-games`;
+  const wasOpen=!closedDetails.has(detailsId);
+  const poolClass=showAllCols.has(pool.letter)?"pool show-all":"pool";
+  const colsBtnLabel=showAllCols.has(pool.letter)?"Basic":"All columns";
+  return `<section class="${poolClass}" data-letter="${pool.letter}"><h2>Pool ${pool.letter}<span class="chip ${pool.is_final?'final':''}">${pool.games_played}/${pool.games_total} games</span><span class="chip">${pool.scenarios_considered.toLocaleString()} scenarios</span>${pool.is_final?'<span class="chip final">FINAL</span>':''}<button class="col-toggle" type="button">${colsBtnLabel}</button></h2><div class="table-wrap"><table class="standings"><thead><tr><th class="team">Team</th><th class="c-links">Links</th><th class="extra-col">Now</th><th class="c-range-header">Seed range</th><th class="c-bracket">Bracket Entry</th><th class="extra-col">Rem</th><th class="extra-col">Rec</th><th class="extra-col">WP</th><th class="extra-col">Avg PA</th><th class="extra-col">Avg Diff</th></tr></thead><tbody>${rows}</tbody></table></div><div class="games"><details id="${detailsId}" ${wasOpen?"open":""}><summary>${pool.games.length} games — ${pool.games_played} played</summary><div class="game-grid">${games}</div></details></div></section>`;
+}
+const closedDetails=new Set();
+function snapshotOpenDetails() { closedDetails.clear(); document.querySelectorAll("details[id]").forEach(el=>{if(!el.open)closedDetails.add(el.id);}); }
+const showAllCols=new Set();
+document.addEventListener("click",(ev)=>{
+  const btn=ev.target.closest(".col-toggle"); if(!btn)return;
+  const pool=btn.closest(".pool"); if(!pool)return;
+  const letter=pool.dataset.letter;
+  if(showAllCols.has(letter)){showAllCols.delete(letter);pool.classList.remove("show-all");btn.textContent="All columns";}
+  else{showAllCols.add(letter);pool.classList.add("show-all");btn.textContent="Basic";}
+});
+const WATCHED_KEY="poolplay:watched_teams:v1";
+const watchedTeams=new Set(((()=>{try{return JSON.parse(localStorage.getItem(WATCHED_KEY)||"[]").map(Number);}catch(_){return[];}})()));
+function saveWatched(){try{localStorage.setItem(WATCHED_KEY,JSON.stringify([...watchedTeams]));}catch(_){}}
+document.addEventListener("click",(ev)=>{
+  const star=ev.target.closest(".team-star"); if(!star)return;
+  ev.preventDefault();
+  const tid=Number(star.dataset.teamId); if(!tid)return;
+  if(watchedTeams.has(tid))watchedTeams.delete(tid); else watchedTeams.add(tid);
+  saveWatched();
+  if(lastRenderedData)render(lastRenderedData);
+});
+function positionBpPopover(wrap) {
+  const chip=wrap.querySelector(".bp-chip"), pop=wrap.querySelector(".bp-popover");
+  if(!chip||!pop)return;
+  const prevDisplay=pop.style.display;
+  pop.style.visibility="hidden"; pop.style.display="block";
+  const pr=pop.getBoundingClientRect();
+  pop.style.display=prevDisplay; pop.style.visibility="";
+  const cr=chip.getBoundingClientRect(), margin=6, vw=window.innerWidth, vh=window.innerHeight;
+  let left=cr.left+cr.width/2-pr.width/2;
+  left=Math.max(8,Math.min(left,vw-pr.width-8));
+  let top;
+  if(cr.bottom+margin+pr.height<=vh-8)top=cr.bottom+margin;
+  else top=Math.max(8,cr.top-margin-pr.height);
+  pop.style.left=`${left}px`; pop.style.top=`${top}px`;
+}
+document.addEventListener("click",(ev)=>{
+  const chip=ev.target.closest(".bp-chip");
+  if(chip){
+    const wrap=chip.closest(".bp-chip-wrap"); if(!wrap)return;
+    document.querySelectorAll(".bp-chip-wrap.open").forEach(w=>{if(w!==wrap){w.classList.remove("open");w.querySelector(".bp-chip")?.setAttribute("aria-expanded","false");}});
+    const nowOpen=wrap.classList.toggle("open");
+    chip.setAttribute("aria-expanded",nowOpen?"true":"false");
+    if(nowOpen)positionBpPopover(wrap);
+    ev.stopPropagation(); return;
+  }
+  if(!ev.target.closest(".bp-popover")){document.querySelectorAll(".bp-chip-wrap.open").forEach(w=>{w.classList.remove("open");w.querySelector(".bp-chip")?.setAttribute("aria-expanded","false");});}
+});
+window.addEventListener("scroll",()=>{document.querySelectorAll(".bp-chip-wrap.open").forEach(positionBpPopover);},true);
+window.addEventListener("resize",()=>{document.querySelectorAll(".bp-chip-wrap.open").forEach(positionBpPopover);});
+document.addEventListener("keydown",(ev)=>{
+  if(ev.key==="Escape"){document.querySelectorAll(".bp-chip-wrap.open").forEach(w=>{w.classList.remove("open");w.querySelector(".bp-chip")?.setAttribute("aria-expanded","false");});}
+  else if((ev.key==="Enter"||ev.key===" ")&&ev.target.matches(".bp-chip")){ev.preventDefault();ev.target.click();}
+});
+const ACTIVITY_MAX=200;
+const activityLog=[];
+let prevGameState=null;
+function gameKey(g){return `${g.pool_letter}:${g.game_number??''}:${g.team_a_id}-${g.team_b_id}`;}
+function snapshotGames(data){
+  const m=new Map();
+  for(const p of data.pools||[]){for(const g of p.games||[]){m.set(gameKey(g),{played:!!g.played,winner:g.winner_id??null,a_score:g.winner_score,b_score:g.loser_score,is_tie:!!g.is_tie,team_a:g.team_a_name,team_b:g.team_b_name,live_a:g.live?g.live.team_a_score:null,live_b:g.live?g.live.team_b_score:null,inning:g.live?(g.live.inning_label||null):null,had_live:!!g.live});}}
+  return m;
+}
+function pushActivity(entry){activityLog.unshift({ts:Date.now()/1000,...entry});if(activityLog.length>ACTIVITY_MAX)activityLog.length=ACTIVITY_MAX;}
+function diffAndLog(prev,next){
+  if(!prev)return;
+  for(const [key,n] of next){
+    const p=prev.get(key); if(!p)continue;
+    const label=`${n.team_a} vs ${n.team_b}`;
+    if(!p.had_live&&n.had_live&&!n.played)pushActivity({icon:"▶",class:"start",text:`Game started — ${label}`});
+    if(p.inning&&n.inning&&p.inning!==n.inning)pushActivity({icon:"○",class:"inning",text:`${n.inning} — ${n.team_a} ${n.live_a??0}, ${n.team_b} ${n.live_b??0}`});
+    if(p.had_live&&n.had_live&&!n.played&&(p.live_a!==n.live_a||p.live_b!==n.live_b)){const da=(n.live_a??0)-(p.live_a??0),db=(n.live_b??0)-(p.live_b??0),who=da>0?n.team_a:(db>0?n.team_b:null);if(who)pushActivity({icon:"⚾",class:"score",text:`${who} scored — ${n.team_a} ${n.live_a??0}, ${n.team_b} ${n.live_b??0}`});}
+    if(!p.played&&n.played){if(n.is_tie)pushActivity({icon:"■",class:"final",text:`Final: ${n.team_a} ${n.a_score} – ${n.team_b} ${n.b_score} (tie)`});else pushActivity({icon:"■",class:"final",text:`Final: ${n.team_a} ${n.a_score} – ${n.team_b} ${n.b_score}`});}
+  }
+}
+function renderActivityFeed(){
+  const host=document.getElementById("activity-feed"); if(!host)return;
+  const count=activityLog.length;
+  if(count===0){host.innerHTML=`<details><summary>Activity <span class="muted">(0)</span></summary><p class="muted activity-empty">Events will appear here as games start, score, and finish.</p></details>`;return;}
+  const items=activityLog.map(e=>`<li class="activity-item ${e.class}"><span class="act-time">${fmtTime(e.ts)}</span><span class="act-icon">${e.icon}</span><span class="act-text">${e.text}</span></li>`).join("");
+  const wasOpen=host.querySelector("details")?.hasAttribute("open");
+  host.innerHTML=`<details${wasOpen?" open":""}><summary>Activity <span class="muted">(${count})</span></summary><ul class="activity-list">${items}</ul></details>`;
+}
+async function render(data){
+  const app=document.getElementById("app");
+  const evName=(data.event_name||"").trim();
+  document.getElementById("event-name").textContent=evName||"Pool Play Seed Projections";
+  document.getElementById("division").textContent=data.division_name||"(loading)";
+  const meta=[];
+  if(data.event_dates)meta.push(data.event_dates);
+  if(data.event_location)meta.push(data.event_location);
+  document.getElementById("event-meta").textContent=meta.join(" · ");
+  document.title=evName?`${evName} — Pool Seeds`:"Pool Play Seed Projections";
+  document.getElementById("fetched").textContent=fmtTime(data.fetched_at);
+  const src=document.getElementById("source"); src.href=data.source_url;
+  pollState={next_poll_at:data.next_poll_at,next_interval_reason:data.next_interval_reason,next_interval:data.next_interval};
+  renderPollState();
+  if(data.fetch_error){app.innerHTML=`<div class="error">Fetch error: ${data.fetch_error}</div>`;return;}
+  if(!data.pools||data.pools.length===0){app.innerHTML=`<p class="muted">No pool data yet.</p>`;return;}
+  snapshotOpenDetails();
+  const liveGames=[];
+  (data.pools||[]).forEach(pool=>{(pool.games||[]).forEach(g=>{if(g.live)liveGames.push({pool:pool.letter,game:g});});});
+  let liveHtml="";
+  if(liveGames.length){
+    const cards=liveGames.map(({pool,game})=>{const card=renderGame(game);return card.replace('<div class="sb-head">',`<div class="sb-head"><span class="chip">Pool ${pool}</span>`);}).join("");
+    liveHtml=`<section class="live-strip"><h2 class="live-strip-title"><span class="live-dot"></span>Live Now<span class="chip">${liveGames.length} game${liveGames.length===1?"":"s"}</span></h2><div class="game-grid">${cards}</div></section>`;
+  }
+  app.innerHTML=liveHtml+data.pools.map(renderPool).join("");
+  const nextGameState=snapshotGames(data);
+  diffAndLog(prevGameState,nextGameState);
+  prevGameState=nextGameState;
+  renderActivityFeed();
+  lastRenderedRevision=data.revision;
+  lastRenderedData=data;
+}
+async function fetchAndRender(){
+  try{const qs=window.location.search||"";const resp=await fetch("/api/state"+qs);const data=await resp.json();await render(data);}
+  catch(err){document.getElementById("app").innerHTML=`<div class="error">Client error: ${err}</div>`;}
+}
+let _es=null,_lastEventAt=0;
+function connectStream(){
+  if(_es){try{_es.close();}catch(_){}}
+  const es=new EventSource("/api/events");
+  _es=es; _lastEventAt=Date.now();
+  es.addEventListener("state",(ev)=>{
+    _lastEventAt=Date.now();
+    try{
+      const msg=JSON.parse(ev.data);
+      document.getElementById("fetched").textContent=fmtTime(msg.fetched_at);
+      if(msg.next_poll_at!=null){pollState={next_poll_at:msg.next_poll_at,next_interval:msg.next_interval,next_interval_reason:msg.next_interval_reason};renderPollState();}
+      if(msg.revision!==currentRevision){currentRevision=msg.revision;if(msg.revision!==lastRenderedRevision)fetchAndRender();}
+    }catch(err){console.error("bad SSE event",err);}
+  });
+  es.onerror=()=>{if(!document.hidden&&Date.now()-_lastEventAt>20000){console.warn("SSE stale — reconnecting");try{es.close();}catch(_){}fetchAndRender();setTimeout(connectStream,500);}};
+}
+document.addEventListener("visibilitychange",()=>{if(document.hidden)return;fetchAndRender();connectStream();});
+setInterval(()=>{if(document.hidden)return;if(Date.now()-_lastEventAt>35000){console.warn("SSE watchdog — no events in 35 s, reconnecting");connectStream();}},10000);
+fetchAndRender();
+connectStream();
+</script>
+</body>
+</html>
